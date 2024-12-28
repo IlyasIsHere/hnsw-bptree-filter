@@ -1,3 +1,6 @@
+#ifndef BPLUSTREE_H
+#define BPLUSTREE_H
+
 #include <vector>
 #include <utility>
 #include <cmath>
@@ -6,15 +9,32 @@
 
 using namespace std;
 
-
+/**
+ * @brief Checks if two floating point numbers are approximately equal
+ * @param a First number to compare
+ * @param b Second number to compare
+ * @return true if numbers are within epsilon of each other, false otherwise
+ */
 bool areAlmostEqual(float a, float b) { 
     const float eps = 0.000001f;
     return fabs(a - b) < eps; 
 } 
 
-
+/**
+ * @brief B+ tree implementation for indexing float keys with associated record IDs
+ * 
+ * This B+ tree maintains sorted float keys in leaf nodes, with each key potentially 
+ * mapping to multiple record IDs (alternative 3 to handle duplicates). Internal nodes store keys for tree traversal.
+ * Leaf nodes are linked together to facilitate range queries.
+ */
 class BPlusTree {
 private:
+    /**
+     * @brief Node structure for B+ tree
+     * 
+     * Can be either an internal node (containing keys and child pointers) or
+     * a leaf node (containing keys and record IDs). Leaf nodes are linked together.
+     */
     struct Node {
         bool isLeaf;
         vector<float> keys;
@@ -23,6 +43,10 @@ private:
         Node *parent;
         Node *next; // Used only for leaf nodes (for range queries)
 
+        /**
+         * @brief Constructs a new Node
+         * @param isLeaf Whether this is a leaf node
+         */
         Node(bool isLeaf = false) {
             this->isLeaf = isLeaf;
             parent = nullptr;
@@ -33,36 +57,110 @@ private:
     Node *root;
     int d; // The order of the B+Tree (the max number of keys in a node is 2*d)
 
-    Node *getLeaf(float key); // Helper function to get the leaf where the "key" should be
+    /**
+     * @brief Finds the leaf node where a key should be located
+     * @param key The key to search for
+     * @return Pointer to the leaf node where key belongs
+     */
+    Node *getLeaf(float key);
+
+    /**
+     * @brief Splits an overfull leaf node
+     * @param leafNode The leaf node to split
+     */
     void splitLeaf(Node *leafNode);
+
+    /**
+     * @brief Inserts a key and child pointer into an internal node
+     * @param currNode The internal node to insert into
+     * @param key The key to insert
+     * @param newChild Pointer to the new child node
+     * @return Pair containing the inserted key and child pointer
+     */
     pair<float, Node*> insertInternal(Node *currNode, float key, Node *newChild);
+
+    /**
+     * @brief Splits an overfull internal node
+     * @param internalNode The internal node to split
+     */
     void splitInternal(Node *internalNode);
 
+    /**
+     * @brief Recursively deletes a node and all its children
+     * @param node The root of the subtree to delete
+     */
+    void deleteTree(Node* node) {
+        if (node != nullptr) {
+            if (!node->isLeaf) {
+                for (Node* child : node->children) {
+                    deleteTree(child);
+                }
+            }
+            delete node;
+        }
+    }
+
 public:
+    /**
+     * @brief Constructs a new B+ tree
+     * @param order The order d of the tree (max 2d keys per node)
+     */
     BPlusTree(int order) : d(order), root(nullptr) {}
 
-    // Inserts a new data point
+    /**
+     * @brief Destructor that cleans up all nodes
+     */
+    ~BPlusTree() {
+        deleteTree(root);
+    }
+
+    /**
+     * @brief Inserts a new key-recordID pair into the tree
+     * @param key The key to insert
+     * @param recordID The record ID associated with the key
+     */
     void insert(float key, int recordID);
 
-    // Searches for data points by a key and returns a vector of their IDs
+    /**
+     * @brief Searches for all record IDs associated with a key
+     * @param key The key to search for
+     * @return Vector of record IDs matching the key
+     */
     vector<int> search(float key);
 
-    // Removes all data points by a key
-    void remove(float key);
-
-    // Performs a range query using a lower and upper key
+    /**
+     * @brief Finds all record IDs with keys in the given range
+     * @param lower Lower bound of the key range (inclusive)
+     * @param upper Upper bound of the key range (inclusive)
+     * @return Vector of record IDs within the range
+     */
     vector<int> rangeSearch(float lower, float upper);
 
+    /**
+     * @brief Displays the tree structure
+     */
     void display() { 
         cout << "\nB+ Tree Structure:\n" << endl;
         displayTree(root, 0); 
     }
+
+    /**
+     * @brief Helper function to recursively display the tree
+     * @param node Current node to display
+     * @param level Current level in the tree (for indentation)
+     */
     void displayTree(Node* node, int level);
 
+    /**
+     * @brief Returns all keys in the tree in sorted order
+     * @return Vector of keys from traversing leaf nodes left to right
+     */
     vector<float> traverseLeaves();
 };
 
 BPlusTree::Node *BPlusTree::getLeaf(float key) {
+    if (this->root == nullptr) return nullptr;
+
     Node *currPtr = this->root;
 
     while (!currPtr->isLeaf) {
@@ -262,7 +360,6 @@ vector<float> BPlusTree::traverseLeaves() {
     vector<float> keys;
     
     if (root == nullptr) {
-        cout << "Empty tree" << endl;
         return keys;
     }
 
@@ -283,4 +380,4 @@ vector<float> BPlusTree::traverseLeaves() {
     return keys;
 }
 
-
+#endif
