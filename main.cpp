@@ -8,7 +8,52 @@
 
 using namespace std;
 
+vector<int> getBruteForceResults(const vector<float>& queryVector, float lower, float upper, 
+                               const vector<vector<float>>& data, int k) {
+    vector<pair<float, int>> distances;
+    
+    // Calculate distances for all points within range
+    for(size_t i = 0; i < data.size(); i++) {
+        if(data[i][0] >= lower && data[i][0] <= upper) {
+            // Get vector without range attribute
+            vector<float> vec(data[i].begin() + 1, data[i].end());
+            float dist = computeDistance(vec, queryVector);
+            distances.push_back({dist, i});
+        }
+    }
+    
+    // Sort by distance
+    sort(distances.begin(), distances.end());
+    
+    // Get top k results
+    vector<int> result;
+    for(int i = 0; i < min(k, (int)distances.size()); i++) {
+        result.push_back(distances[i].second);
+    }
+    
+    return result;
+}
+
+float computeRecall(const vector<int>& groundTruth, const vector<int>& approximate) {
+    if(groundTruth.empty()) return 0.0f;
+    
+    // Convert ground truth to set for O(1) lookup
+    unordered_set<int> truthSet(groundTruth.begin(), groundTruth.end());
+    
+    // Count how many points from approximate results are in ground truth
+    int correct = 0;
+    for(int id : approximate) {
+        if(truthSet.find(id) != truthSet.end()) {
+            correct++;
+        }
+    }
+    
+    return static_cast<float>(correct) / groundTruth.size();
+}
+
 int main() {
+    // string file_path = "data/dummy-data.bin";
+    // string query_path = "data/dummy-queries.bin";
     string file_path = "data/contest-data-release-1m.bin";
     string query_path = "data/contest-queries-release-1m.bin";
     int num_dimensions = 102;
@@ -52,11 +97,12 @@ int main() {
         }
     }
 
-    const float HNSW_THRESHOLD = 0.7; // If more than 70% of data points remain after filtering
+    const float HNSW_THRESHOLD = 0.3; // If more than 30% of data points remain after filtering
 
     vector<double> queryTimes;
     int correctResults = 0;
     int totalExpectedResults = 0;
+    double totalRecall = 0.0;
 
     for (auto &query: filteredQueries) {
         Timer timer;
@@ -73,7 +119,7 @@ int main() {
         vector<int> knn;
         if (filteredRatio > HNSW_THRESHOLD) {
             // Use HNSW on full dataset but get more neighbors to ensure we find enough valid ones
-            // cout << "Using HNSW (filtered ratio: " << filteredRatio << ")" << endl;
+            cout << "Using HNSW (filtered ratio: " << filteredRatio << ")" << endl;
             const int extraK = k * 10; // Get 10x more neighbors to have enough after filtering
             
             std::priority_queue<std::pair<float, hnswlib::labeltype>> result = hnsw_index->searchKnn(queryVector.data(), extraK);
@@ -91,7 +137,7 @@ int main() {
             
             // If we couldn't find enough neighbors, fall back to brute force
             if (filtered_knn.size() < k) {
-                // cout << "HNSW couldn't find enough valid neighbors, falling back to brute force" << endl;
+                cout << "HNSW couldn't find enough valid neighbors, falling back to brute force" << endl;
                 knn = getKNN(k, data, candidatesIDs, queryVector);
             } else {
                 knn = filtered_knn;
@@ -99,7 +145,7 @@ int main() {
             correctResults += knn.size();  // Assuming HNSW results are correct
         } else {
             // If few points remain, use brute force on the filtered subset
-            // cout << "Using brute force (filtered ratio: " << filteredRatio << ")" << endl;
+            cout << "Using brute force (filtered ratio: " << filteredRatio << ")" << endl;
             knn = getKNN(k, data, candidatesIDs, queryVector);
             correctResults += knn.size();  // Assuming brute force results are correct
         }
@@ -107,11 +153,34 @@ int main() {
         totalExpectedResults += k;  // k is the target number of neighbors
         queryTimes.push_back(timer.elapsed());
         
-        // cout << "Query completed in " << timer.elapsed() * 1000 << " ms\n";
+        cout << "Query completed in " << timer.elapsed() * 1000 << " ms\n";
+
+        vector<int> groundTruth = getBruteForceResults(queryVector, lower, upper, data, k);
+        cout << "Ground truth size: " << groundTruth.size() << endl;
+        cout << "KNN size: " << knn.size() << endl;
+        cout << "Recall: " << computeRecall(groundTruth, knn) << endl;
+
+        cout << "\nGround Truth Results: [";
+        for (size_t i = 0; i < groundTruth.size(); i++) {
+            cout << groundTruth[i];
+            if (i < groundTruth.size() - 1) cout << ", ";
+        }
+        cout << "]\n";
+
+        cout << "Computed Results: [";
+        for (size_t i = 0; i < knn.size(); i++) {
+            cout << knn[i];
+            if (i < knn.size() - 1) cout << ", ";
+        }
+        cout << "]\n\n";
+        cout << "----------------------------------------" << endl;
+
+
+        totalRecall += computeRecall(groundTruth, knn);
     }
 
     // Compute and display final metrics
-    QueryMetrics metrics = computeMetrics(queryTimes, correctResults, totalExpectedResults);
+    QueryMetrics metrics = computeMetrics(queryTimes, correctResults, totalExpectedResults, totalRecall);
     displayMetrics(metrics);
 
     // Clean up

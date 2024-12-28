@@ -24,7 +24,8 @@ public:
     }
 };
 
-QueryMetrics computeMetrics(const std::vector<double>& queryTimes, int correctResults, int totalExpectedResults) {
+QueryMetrics computeMetrics(const std::vector<double>& queryTimes, int correctResults, 
+                          int totalExpectedResults, double totalRecall = 0.0) {
     QueryMetrics metrics;
     
     // Calculate total runtime
@@ -39,7 +40,7 @@ QueryMetrics computeMetrics(const std::vector<double>& queryTimes, int correctRe
     metrics.qps = queryTimes.size() / totalTime;
     
     // Calculate recall
-    metrics.recall = static_cast<double>(correctResults) / totalExpectedResults;
+    metrics.recall = totalRecall / queryTimes.size();  // Average recall across all queries
     
     metrics.totalQueries = queryTimes.size();
     
