@@ -32,4 +32,5 @@
 *.app
 
 # Data
-data/
+data/contest-data-release-1m.bin
+data/contest-queries-release-1m.bin
